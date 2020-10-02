@@ -37,6 +37,20 @@
 
 static bool motorSetEnable = false;
 
+/* Start a ModQuad Block */
+static uint16_t motor_set_timer = 0;
+
+static float r1 = -1;
+static float r2 = -1;
+static float r3 = 1;
+static float r4 = 1;
+static float p1 = 1;
+static float p2 = -1;
+static float p3 = -1;
+static float p4 = 1;
+static float cz = 1;
+/* End ModQuad Block */
+
 static struct {
   uint32_t m1;
   uint32_t m2;
@@ -80,10 +94,14 @@ void powerDistribution(const control_t *control)
   #ifdef QUAD_FORMATION_X
     int16_t r = control->roll / 2.0f;
     int16_t p = control->pitch / 2.0f;
-    motorPower.m1 = limitThrust(control->thrust - r + p + control->yaw);
-    motorPower.m2 = limitThrust(control->thrust - r - p - control->yaw);
-    motorPower.m3 =  limitThrust(control->thrust + r - p + control->yaw);
-    motorPower.m4 =  limitThrust(control->thrust + r + p - control->yaw);
+
+    /* Modify for ModQuad */
+    motorPower.m1 =  limitThrust(control->thrust + r1*r + p1*p + cz*control->yaw); //M13
+    motorPower.m2 =  limitThrust(control->thrust + r2*r + p2*p - cz*control->yaw); //M14
+    motorPower.m3 =  limitThrust(control->thrust + r3*r + p3*p + cz*control->yaw); //M15
+    motorPower.m4 =  limitThrust(control->thrust + r4*r + p4*p - cz*control->yaw); //M16
+    /* End Modify for ModQuad */
+
   #else // QUAD_FORMATION_NORMAL
     motorPower.m1 = limitThrust(control->thrust + control->pitch +
                                control->yaw);
@@ -95,7 +113,12 @@ void powerDistribution(const control_t *control)
                                control->yaw);
   #endif
 
-  if (motorSetEnable)
+  // The timer is reduced on every tick.
+  if (motor_set_timer){
+      motor_set_timer--;
+  }
+
+  if ( motorSetEnable || motor_set_timer )
   {
     motorsSetRatio(MOTOR_M1, motorPowerSet.m1);
     motorsSetRatio(MOTOR_M2, motorPowerSet.m2);
@@ -111,8 +134,25 @@ void powerDistribution(const control_t *control)
   }
 }
 
+PARAM_GROUP_START(var)
+PARAM_ADD(PARAM_FLOAT, roll1, &r1)
+PARAM_ADD(PARAM_FLOAT, roll2, &r2)
+PARAM_ADD(PARAM_FLOAT, roll3, &r3)
+PARAM_ADD(PARAM_FLOAT, roll4, &r4)
+PARAM_ADD(PARAM_FLOAT, pitch1, &p1)
+PARAM_ADD(PARAM_FLOAT, pitch2, &p2)
+PARAM_ADD(PARAM_FLOAT, pitch3, &p3)
+PARAM_ADD(PARAM_FLOAT, pitch4, &p4)
+PARAM_ADD(PARAM_FLOAT, czz, &cz)
+PARAM_GROUP_STOP(var)
+
 PARAM_GROUP_START(motorPowerSet)
 PARAM_ADD(PARAM_UINT8, enable, &motorSetEnable)
+
+/* Add from ModQuad */
+PARAM_ADD(PARAM_UINT16, motor_timer, &motor_set_timer)  // Enable based on timer
+/* End Add from ModQuad */
+
 PARAM_ADD(PARAM_UINT16, m1, &motorPowerSet.m1)
 PARAM_ADD(PARAM_UINT16, m2, &motorPowerSet.m2)
 PARAM_ADD(PARAM_UINT16, m3, &motorPowerSet.m3)
